@@ -28,8 +28,8 @@ pub fn create_app(config: Config) {
         .add_system(systems::debug_exit::debug_exit)
         // .add_system(systems::input::keyboard_input_system)
         // .add_system(systems::debug_systems::animate_translation)
-        .add_system(systems::state_manager::word_progress_manager)
         .add_system(systems::state_manager::word_generator)
+        .add_system(systems::state_manager::word_progress_manager)
         .add_system(systems::state_manager::word_progress_display_updater)
         .run();
 }

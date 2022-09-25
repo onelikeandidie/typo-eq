@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use crate::{app::{resources::{AppState, AppAssets}, components::{word::{Word, FocusedWord, TranslatedWord}, animate::AnimateTranslation}, events::ProgressEvent}};
+use crate::{app::{resources::{AppState, AppAssets}, components::word::{Word, FocusedWord, TranslatedWord}, events::ProgressEvent}};
 use rand::{prelude::*, distributions::Uniform};
 
 pub fn word_generator(
