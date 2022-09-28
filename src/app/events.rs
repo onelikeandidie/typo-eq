@@ -1,9 +1,10 @@
 use std::fmt::Display;
 
+use crate::importer::dictionary::Dictionary;
+
 pub enum AppEvent {
     LoadingStarted,
-    DictionaryLoaded,
-    FontsLoaded,
+    DictionaryLoaded(Dictionary),
     LoadingFinished,
 }
 
@@ -12,8 +13,7 @@ impl Display for AppEvent {
         write!(f, "{}", match self {
             Self::LoadingStarted => "Loading Started",
             Self::LoadingFinished => "Loading Finished",
-            Self::DictionaryLoaded => "Dictionary Loaded",
-            Self::FontsLoaded => "Fonts loaded",
+            Self::DictionaryLoaded(_) => "Dictionary Loaded",
         })
     }
 }

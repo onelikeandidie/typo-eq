@@ -7,6 +7,6 @@ edition = "2021"
 
 [dependencies]
 quick-xml = "0.25.0"
-regex = "1.6.0"
-bevy = { version = "0.8.1", features = ["dynamic"] }
 rand = "0.8.5"
+crossterm = "0.25.0"
+chrono = "0.4.22"
