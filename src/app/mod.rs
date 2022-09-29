@@ -59,12 +59,7 @@ pub fn create_app(config: Config) {
     }
     let dict = dict.expect("Could not load dictionary");
     
-    let mut state = State {
-        progress: 0,
-        failed: false,
-        wpm: 0.0,
-        last_word_timestamp: Utc::now().timestamp_millis(),
-    };
+    let mut state = State::default();
 
     let mut word = new_word(&dict);
     println!("{} -> {}", word.original, word.translation);
@@ -123,7 +118,9 @@ pub fn create_app(config: Config) {
                             stdout.execute(ResetColor).unwrap();
                         }
                         state.failed = true;
+                        state.stats.chars_failed += 1;
                     }
+                    state.stats.chars_typed += 1;
                     stdout.lock().flush().unwrap();
                 }
                 // Update progress display
@@ -150,6 +147,7 @@ pub fn create_app(config: Config) {
                 if state.progress >= word.size {
                     // Update last word completed timestamp
                     state.last_word_timestamp = Utc::now().timestamp_millis();
+                    state.stats.completed += 1;
                     // Show the completed word in grey
                     execute!(stdout,
                         MoveToPreviousLine(1),
@@ -180,6 +178,19 @@ pub fn create_app(config: Config) {
             _ => {},
         }
     }
+
+    println!();
+    // Update wpm
+    let current_timestamp = Utc::now().timestamp_millis();
+    let diff = current_timestamp - state.started_at;
+    state.wpm = state.stats.completed as f64 / (diff as f64 / 1000.0 / 60.0);
+    println!(
+        "Completed: {} words. {} chars typed, of which {} were misses ({}%). Average wpm: {}",
+        state.stats.completed, state.stats.chars_typed, state.stats.chars_failed,
+        (state.stats.chars_failed as f64 / state.stats.chars_typed as f64 * 100.0).round(),
+        state.wpm.round(),
+    );
+    stdout.execute(MoveToColumn(0)).unwrap();
     
     execute!(
         stdout,
