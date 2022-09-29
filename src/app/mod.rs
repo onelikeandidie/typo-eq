@@ -3,10 +3,10 @@ use std::io::{stdout, Write};
 use std::sync::mpsc;
 use std::thread::{self, sleep};
 use std::time::Duration;
-use crossterm::cursor::{MoveLeft, MoveToColumn, MoveToPreviousLine, MoveToNextLine};
+use crossterm::cursor::{MoveLeft, MoveToColumn};
 use crossterm::event::{read, Event, KeyCode, KeyEvent, KeyModifiers};
-use crossterm::style::{SetForegroundColor, Color, ResetColor};
-use crossterm::{self, execute, ExecutableCommand};
+use crossterm::style::Color;
+use crossterm::{self, ExecutableCommand};
 use crossterm::terminal::{Clear, ClearType};
 use rand::distributions::Uniform;
 use rand::prelude::Distribution;
@@ -29,8 +29,6 @@ use crate::{config::Config, importer::dictionary::Dictionary};
 pub const SKIP_CHARACTERS: [char; 2] = [
     '/', '|'
 ];
-
-fn zero() -> (u16, u16) {(0, 0)}
 
 pub fn create_app(config: Config) {
     let mut stdout = stdout();
@@ -65,7 +63,6 @@ pub fn create_app(config: Config) {
                     (Utc::now().timestamp_millis() - load_time) as f64 / 1000.0
                 ).as_str());
             }
-            _ => {},
         }
     }
     let dict = dict.expect("Could not load dictionary");

@@ -1,6 +1,6 @@
 use std::io::{stdout, Write};
 
-use crossterm::{terminal::{self, EnterAlternateScreen, enable_raw_mode, disable_raw_mode, LeaveAlternateScreen, Clear, ClearType}, style::{Color, SetForegroundColor, ResetColor}, execute, cursor::{MoveTo, position}, event::{PushKeyboardEnhancementFlags, KeyboardEnhancementFlags, PopKeyboardEnhancementFlags}};
+use crossterm::{terminal::{EnterAlternateScreen, enable_raw_mode, disable_raw_mode, LeaveAlternateScreen, Clear, ClearType}, style::{Color, SetForegroundColor, ResetColor}, execute, cursor::{MoveTo, position}, event::{PushKeyboardEnhancementFlags, KeyboardEnhancementFlags, PopKeyboardEnhancementFlags}};
 
 use super::util::term_center;
 
