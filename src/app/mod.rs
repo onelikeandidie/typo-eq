@@ -1,12 +1,13 @@
 use std::fs::File;
 use std::io::{stdout, Write};
 use std::sync::mpsc;
-use std::thread;
+use std::thread::{self, sleep};
+use std::time::Duration;
 use crossterm::cursor::{MoveLeft, MoveToColumn, MoveToPreviousLine, MoveToNextLine};
-use crossterm::event::{PushKeyboardEnhancementFlags, KeyboardEnhancementFlags, PopKeyboardEnhancementFlags, read, Event, KeyCode, KeyEvent, KeyModifiers};
+use crossterm::event::{read, Event, KeyCode, KeyEvent, KeyModifiers};
 use crossterm::style::{SetForegroundColor, Color, ResetColor};
 use crossterm::{self, execute, ExecutableCommand};
-use crossterm::terminal::{enable_raw_mode, disable_raw_mode, Clear, ClearType};
+use crossterm::terminal::{Clear, ClearType};
 use rand::distributions::Uniform;
 use rand::prelude::Distribution;
 use rand::thread_rng;
@@ -14,8 +15,13 @@ use chrono::offset::Utc;
 
 pub mod events;
 pub mod word;
+pub mod render;
+pub mod cursor;
+pub mod util;
 
+use crate::app::cursor::Cursor;
 use crate::app::events::*;
+use crate::app::render::{Renderer, TextAlign};
 use crate::app::word::*;
 
 use crate::{config::Config, importer::dictionary::Dictionary};
@@ -24,19 +30,12 @@ pub const SKIP_CHARACTERS: [char; 2] = [
     '/', '|'
 ];
 
+fn zero() -> (u16, u16) {(0, 0)}
+
 pub fn create_app(config: Config) {
-    enable_raw_mode()
-        .expect("This app requires raw mode to be available in order to function correctly");
-    
     let mut stdout = stdout();
-    execute!(
-        stdout,
-        PushKeyboardEnhancementFlags(
-            KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES
-                | KeyboardEnhancementFlags::REPORT_ALL_KEYS_AS_ESCAPE_CODES
-                | KeyboardEnhancementFlags::REPORT_EVENT_TYPES
-        )
-    ).unwrap();
+
+    let renderer = Renderer::init();
 
     let (ltx, lrx) = mpsc::channel::<AppEvent>();
     let _loading_thread = thread::spawn(move || {
@@ -51,8 +50,15 @@ pub fn create_app(config: Config) {
     let mut dict: Option<Dictionary> = None;
     while let Ok(event) = lrx.recv() {
         match event {
+            AppEvent::LoadingStarted => {
+                renderer.print_at_center_default("Loading Started");
+            }
             AppEvent::DictionaryLoaded(loaded_dict) => {
                 dict = Some(loaded_dict);
+                renderer.print_at_center_default("Dictionary Loaded");
+            }
+            AppEvent::LoadingFinished => {
+                renderer.print_at_center_default("Finished Loading");
             }
             _ => {},
         }
@@ -61,9 +67,13 @@ pub fn create_app(config: Config) {
     
     let mut state = State::default();
 
+    sleep(Duration::from_secs(1));
     let mut word = new_word(&dict);
-    println!("{} -> {}", word.original, word.translation);
-    stdout.execute(MoveToColumn(0)).unwrap();
+    renderer.print_at_center_default(format!(
+        "{} -> {}", 
+        word.original, 
+        word.translation
+    ).as_str());
 
     while let Ok(event) = read() {
         match event {
@@ -107,15 +117,22 @@ pub fn create_app(config: Config) {
                             // Move cursor back and write the right char
                             stdout.execute(MoveLeft(1)).unwrap();
                         }
-                        stdout.execute(MoveToColumn(state.progress as u16)).unwrap();
-                        print!("{}", c);
+                        renderer.print_at_center(
+                            format!("{}", c).as_str(),
+                            (state.progress as i16 - (word.size / 2) as i16, 2),
+                            None, None, None,
+                            None
+                        );
                         state.progress += 1;
                         state.failed = false;
                     } else {
                         if !state.failed {
-                            stdout.execute(SetForegroundColor(Color::DarkRed)).unwrap();
-                            print!("{}", current_char);
-                            stdout.execute(ResetColor).unwrap();
+                            renderer.print_at_center(
+                                format!("{}", current_char).as_str(),
+                                (state.progress as i16 - (word.size / 2) as i16, 2), 
+                                None, Some(Color::DarkRed), None,
+                                None
+                            );
                         }
                         state.failed = true;
                         state.stats.chars_failed += 1;
@@ -124,55 +141,56 @@ pub fn create_app(config: Config) {
                     stdout.lock().flush().unwrap();
                 }
                 // Update progress display
-                execute!(
-                    stdout,
-                    MoveToColumn(word.size as u16 + 1),
-                    SetForegroundColor(Color::DarkGrey),
-                ).unwrap();
-                print!("{}/{}", state.progress, word.size);
+                renderer.print_at_center(
+                    format!("{}/{}", state.progress, word.size).as_str(),
+                    (6, -2), Some(TextAlign::Left), 
+                    Some(Color::DarkGrey), None,
+                    None
+                );
                 // Update wpm display
                 let current_timestamp = Utc::now().timestamp_millis();
                 let diff = current_timestamp - state.last_word_timestamp;
                 state.wpm = 1.0 / (diff as f64 / 1000.0 / 60.0);
-                execute!(stdout,
-                    MoveToColumn((word.size + word.translation.len() + 8).try_into().unwrap()),
-                    SetForegroundColor(Color::DarkYellow),
-                ).unwrap();
-                print!("{} wpm", state.wpm.round());
-                execute!(
-                    stdout,
-                    MoveToColumn(state.progress as u16),
-                    ResetColor,
-                ).unwrap();
+                renderer.print_at_center(
+                    format!("{} wpm", state.wpm.round()).as_str(), 
+                    (-6, -2), Some(TextAlign::Right), 
+                    Some(Color::DarkYellow), None,
+                    None
+                );
+                Cursor::move_to_center(((state.progress as i16 - (word.size / 2) as i16), 2));
                 if state.progress >= word.size {
                     // Update last word completed timestamp
                     state.last_word_timestamp = Utc::now().timestamp_millis();
                     state.stats.completed += 1;
                     // Show the completed word in grey
-                    execute!(stdout,
-                        MoveToPreviousLine(1),
-                        MoveToColumn(0),
-                        SetForegroundColor(Color::DarkGrey),
-                    ).unwrap();
-                    println!("{} -> {}", word.original, word.translation);
+                    renderer.print_at_center(
+                        format!(
+                            "{} -> {}", 
+                            word.original, 
+                            word.translation
+                        ).as_str(), (0, -4),
+                        None, Some(Color::DarkGrey), None,
+                        Some(Clear(ClearType::CurrentLine)),
+                    );
                     // Clear the user input to output the right word in case
                     // there was any rendering mistake
-                    execute!(stdout,
-                        SetForegroundColor(Color::DarkGreen),
-                        MoveToNextLine(1),
-                        Clear(ClearType::CurrentLine),
-                        MoveToColumn(0),
-                    ).unwrap();
-                    println!("{}", word.original);
+                    renderer.clear_line_at_center((0, 2));
+                    // execute!(stdout,
+                    //     SetForegroundColor(Color::DarkGreen),
+                    //     MoveToNextLine(1),
+                    //     Clear(ClearType::CurrentLine),
+                    //     MoveToColumn(0),
+                    // ).unwrap();
+                    // println!("{}", word.original);
                     // New word
                     word = new_word(&dict);
                     state.progress = 0;
-                    execute!(stdout,
-                        ResetColor,
-                        MoveToColumn(0),
-                    ).unwrap();
-                    println!("{} -> {}", word.original, word.translation);
-                    stdout.execute(MoveToColumn(0)).unwrap();
+                    renderer.print_at_center_default(format!(
+                        "{} -> {}", 
+                        word.original, 
+                        word.translation
+                    ).as_str());
+                    Cursor::move_to_center((0, 2));
                 }
             }
             _ => {},
@@ -184,20 +202,18 @@ pub fn create_app(config: Config) {
     let current_timestamp = Utc::now().timestamp_millis();
     let diff = current_timestamp - state.started_at;
     state.wpm = state.stats.completed as f64 / (diff as f64 / 1000.0 / 60.0);
-    println!(
-        "Completed: {} words. {} chars typed, of which {} were misses ({}%). Average wpm: {}",
+    let out = format!(
+        "Completed: {} words. {} chars typed, of which {} were misses ({}% Accuracy). Average wpm: {}",
         state.stats.completed, state.stats.chars_typed, state.stats.chars_failed,
-        (state.stats.chars_failed as f64 / state.stats.chars_typed as f64 * 100.0).round(),
+        100.0 - (state.stats.chars_failed as f64 / state.stats.chars_typed as f64 * 100.0).round(),
         state.wpm.round(),
     );
-    stdout.execute(MoveToColumn(0)).unwrap();
-    
-    execute!(
-        stdout,
-        PopKeyboardEnhancementFlags,
-    ).unwrap();
-
-    disable_raw_mode().unwrap();
+    renderer.print_at_center(
+        out.as_str(), (0, -2),
+        None, Some(Color::DarkYellow), None,
+        Some(Clear(ClearType::CurrentLine))
+    );
+    Cursor::move_to_center((0, 8));
 }
 
 pub fn new_word(dict: &Dictionary) -> Word {
