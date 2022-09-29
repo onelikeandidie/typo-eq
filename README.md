@@ -15,5 +15,12 @@ command in your terminal.
 cargo run -- --dict path/to/xdxf/file
 ```
 
-An application window should start up with a short blank screen while the
-dictionary is being loaded. Then a word will appear and you can begin typing.
+A short loading screen should appear as your dictionary is loaded. Bigger 
+dictionaries typically take longer (_obvio_), the Svenska-English dictionary
+from the Swedish People's Dictionary takes around 1.06 seconds.
+
+## Screenshots
+
+![First Line](docs/screenshot01.png)
+![Completed 1 Word](docs/screenshot02.png)
+![Final Screen](docs/screenshot03.png)

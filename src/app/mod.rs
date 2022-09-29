@@ -48,9 +48,11 @@ pub fn create_app(config: Config) {
     });
 
     let mut dict: Option<Dictionary> = None;
+    let mut load_time = 0;
     while let Ok(event) = lrx.recv() {
         match event {
             AppEvent::LoadingStarted => {
+                load_time = Utc::now().timestamp_millis();
                 renderer.print_at_center_default("Loading Started");
             }
             AppEvent::DictionaryLoaded(loaded_dict) => {
@@ -58,7 +60,10 @@ pub fn create_app(config: Config) {
                 renderer.print_at_center_default("Dictionary Loaded");
             }
             AppEvent::LoadingFinished => {
-                renderer.print_at_center_default("Finished Loading");
+                renderer.print_at_center_default( format!(
+                    "Finished Loading ({} sec)",
+                    (Utc::now().timestamp_millis() - load_time) as f64 / 1000.0
+                ).as_str());
             }
             _ => {},
         }
@@ -143,7 +148,7 @@ pub fn create_app(config: Config) {
                 // Update progress display
                 renderer.print_at_center(
                     format!("{}/{}", state.progress, word.size).as_str(),
-                    (6, -2), Some(TextAlign::Left), 
+                    (2, -2), Some(TextAlign::Left), 
                     Some(Color::DarkGrey), None,
                     None
                 );
@@ -153,7 +158,7 @@ pub fn create_app(config: Config) {
                 state.wpm = 1.0 / (diff as f64 / 1000.0 / 60.0);
                 renderer.print_at_center(
                     format!("{} wpm", state.wpm.round()).as_str(), 
-                    (-6, -2), Some(TextAlign::Right), 
+                    (-2, -2), Some(TextAlign::Right), 
                     Some(Color::DarkYellow), None,
                     None
                 );
@@ -172,16 +177,8 @@ pub fn create_app(config: Config) {
                         None, Some(Color::DarkGrey), None,
                         Some(Clear(ClearType::CurrentLine)),
                     );
-                    // Clear the user input to output the right word in case
-                    // there was any rendering mistake
+                    // Clear the user input
                     renderer.clear_line_at_center((0, 2));
-                    // execute!(stdout,
-                    //     SetForegroundColor(Color::DarkGreen),
-                    //     MoveToNextLine(1),
-                    //     Clear(ClearType::CurrentLine),
-                    //     MoveToColumn(0),
-                    // ).unwrap();
-                    // println!("{}", word.original);
                     // New word
                     word = new_word(&dict);
                     state.progress = 0;
@@ -197,22 +194,32 @@ pub fn create_app(config: Config) {
         }
     }
 
-    println!();
     // Update wpm
     let current_timestamp = Utc::now().timestamp_millis();
     let diff = current_timestamp - state.started_at;
     state.wpm = state.stats.completed as f64 / (diff as f64 / 1000.0 / 60.0);
-    let out = format!(
-        "Completed: {} words. {} chars typed, of which {} were misses ({}% Accuracy). Average wpm: {}",
-        state.stats.completed, state.stats.chars_typed, state.stats.chars_failed,
-        100.0 - (state.stats.chars_failed as f64 / state.stats.chars_typed as f64 * 100.0).round(),
+    // Render final screen
+    let out1 = format!(
+        "Completed: {} words. Average wpm: {}",
+        state.stats.completed, 
         state.wpm.round(),
     );
+    let out2 = format!(
+        "{} chars typed, of which {} were misses ({}% Accuracy).",
+        state.stats.chars_typed, state.stats.chars_failed,
+        100.0 - (state.stats.chars_failed as f64 / state.stats.chars_typed as f64 * 100.0).round(),
+    );
     renderer.print_at_center(
-        out.as_str(), (0, -2),
+        out1.as_str(), (0, 2),
         None, Some(Color::DarkYellow), None,
         Some(Clear(ClearType::CurrentLine))
     );
+    renderer.print_at_center(
+        out2.as_str(), (0, 3),
+        None, Some(Color::DarkYellow), None,
+        Some(Clear(ClearType::CurrentLine))
+    );
+    // Move cursor out of frame as to continue out of raw mode [rp[[er]]]
     Cursor::move_to_center((0, 8));
 }
 
