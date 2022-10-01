@@ -222,7 +222,7 @@ pub fn new_word(dict: &Dictionary) -> Word {
     let mut rng = thread_rng();
     let distribuition = Uniform::new(0, dict.entries.len());
     let word_index = distribuition.sample(&mut rng);
-    let word = dict.entries.get(word_index);
+    let word = dict.words.get(word_index);
     if let Some(word) = word {
         return Word {
             size: word.identifier.chars().count(),

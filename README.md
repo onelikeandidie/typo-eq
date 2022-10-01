@@ -17,7 +17,7 @@ cargo run -- --dict path/to/xdxf/file
 
 A short loading screen should appear as your dictionary is loaded. Bigger 
 dictionaries typically take longer (_obvio_), the Svenska-English dictionary
-from the Swedish People's Dictionary takes around 1.06 seconds.
+from the Swedish People's Dictionary takes around 1.32 seconds.
 
 ## Screenshots
 

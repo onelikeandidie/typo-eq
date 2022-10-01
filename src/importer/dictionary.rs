@@ -6,13 +6,19 @@ use quick_xml::events::Event;
 use quick_xml::Reader;
 
 #[derive(Debug, Clone)]
-pub struct DictionaryEntry {
+pub enum DictionaryEntry {
+    Word(DictionaryWord),
+    Phrase(DictionaryPhrase),
+}
+
+#[derive(Debug, Clone)]
+pub struct DictionaryWord {
     pub kind: String,
     pub identifier: String,
     pub translation: Vec<String>,
 }
 
-impl DictionaryEntry {
+impl DictionaryWord {
     pub fn new(kind: String) -> Self {
         Self {
             kind,
@@ -41,7 +47,7 @@ impl DictionaryPhrase {
     }
 }
 
-impl Display for DictionaryEntry {
+impl Display for DictionaryWord {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}->{}", self.identifier, self.translation.concat())
     }
@@ -50,6 +56,8 @@ impl Display for DictionaryEntry {
 #[derive(Clone)]
 pub struct Dictionary {
     pub entries: Vec<DictionaryEntry>,
+    pub words: Vec<DictionaryWord>,
+    pub phrases: Vec<DictionaryPhrase>,
     pub from: String,
     pub to: String,
 }
@@ -58,13 +66,14 @@ impl Dictionary {
     pub fn from_file(mut file: File) -> Self {
         file.seek(SeekFrom::Start(0)).unwrap();
         let file = BufReader::new(file);
-        let mut dict = Vec::new();
+        let mut entries = Vec::new();
+        let mut words = Vec::new();
         let mut phrases = Vec::new();
         let mut from = "Unkown".to_string();
         let mut to   = "Unkown".to_string();
 
         let mut parser = Reader::from_reader(file);
-        let mut entry = None;
+        let mut word = None;
         let mut phrase = None;
         let mut buf = Vec::new();
         let mut current_tag = String::new();
@@ -77,8 +86,8 @@ impl Dictionary {
                     let tag = e.name();
                     let tag = String::from_utf8(tag.as_ref().to_vec()).unwrap();
                     if tag.as_str() == "ar" {
-                        let new_entry = DictionaryEntry::new(tag.clone());
-                        entry = Some(new_entry);
+                        let new_entry = DictionaryWord::new(tag.clone());
+                        word = Some(new_entry);
                     }
                     if tag.as_str() == "xdxf" {
                         let lang_from = e.try_get_attribute("lang_from");
@@ -109,7 +118,7 @@ impl Dictionary {
                     current_attrs = attrs.collect();
                 }
                 Ok(Event::Text(e)) => {
-                    if let Some(entry) = entry.as_mut() {
+                    if let Some(entry) = word.as_mut() {
                         if current_tag == "k" {
                             entry.identifier = e.unescape().unwrap().to_string();
                             if let Some(phrase) = phrase.as_mut() {
@@ -130,12 +139,14 @@ impl Dictionary {
                     let tag = e.name();
                     let tag = String::from_utf8(tag.as_ref().to_vec()).unwrap();
                     if tag.as_str() == "ar" {
-                        if let Some(new_entry) = entry {
-                            dict.push(new_entry);
-                            entry = None;
+                        if let Some(new_word) = word {
+                            words.push(new_word.clone());
+                            entries.push(DictionaryEntry::Word(new_word));
+                            word = None;
                         }
                         if let Some(new_phrase) = phrase {
-                            phrases.push(new_phrase);
+                            phrases.push(new_phrase.clone());
+                            entries.push(DictionaryEntry::Phrase(new_phrase));
                             phrase = None;
                         }
                     }
@@ -146,6 +157,6 @@ impl Dictionary {
             }
             buf.clear();
         }
-        return Dictionary { entries: dict, from, to };
+        return Dictionary { entries, words, phrases, from, to };
     }
 }
