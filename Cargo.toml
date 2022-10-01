@@ -2,8 +2,14 @@
 name = "typo-eq"
 description = "Typo-eq is a typing training app for other languages. All it needs is a dictionary for words and their translations."
 license = "GPL-3.0"
-version = "0.1.1"
+version = "0.2.0"
 edition = "2021"
+repository = "https://github.com/onelikeandidie/typo-eq"
+
+[lib]
+name = "typo_eq"
+path = "src/lib.rs"
+crate-type = ["lib"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

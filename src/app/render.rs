@@ -1,6 +1,6 @@
 use std::io::{stdout, Write};
 
-use crossterm::{terminal::{self, EnterAlternateScreen, enable_raw_mode, disable_raw_mode, LeaveAlternateScreen, Clear, ClearType}, style::{Color, SetForegroundColor, ResetColor}, execute, cursor::{MoveTo, position}, event::{PushKeyboardEnhancementFlags, KeyboardEnhancementFlags, PopKeyboardEnhancementFlags}};
+use crossterm::{terminal::{EnterAlternateScreen, enable_raw_mode, disable_raw_mode, LeaveAlternateScreen, Clear, ClearType}, style::{Color, SetForegroundColor, ResetColor}, execute, cursor::{MoveTo, position, MoveToRow, Hide, Show}, event::{PushKeyboardEnhancementFlags, KeyboardEnhancementFlags, PopKeyboardEnhancementFlags}};
 
 use super::util::term_center;
 
@@ -22,6 +22,7 @@ impl Renderer {
         execute!(
             stdout,
             EnterAlternateScreen,
+            Hide,
             PushKeyboardEnhancementFlags(
                 KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES
                     | KeyboardEnhancementFlags::REPORT_ALL_KEYS_AS_ESCAPE_CODES
@@ -35,6 +36,7 @@ impl Renderer {
         execute!(
             stdout,
             PopKeyboardEnhancementFlags,
+            Show,
             LeaveAlternateScreen,
         ).unwrap();
     
@@ -133,6 +135,15 @@ impl Renderer {
                 (center.1 as i16 + offset.1) as u16
             ), 
         )
+    }
+    pub fn clear_down_from_center_at(self: &Self, offset_y: i16) {
+        let center = term_center();
+        let mut stdout = stdout();
+        execute!(
+            stdout,
+            MoveToRow((center.1 as i16 + offset_y) as u16),
+            Clear(ClearType::FromCursorDown)
+        ).expect("Could not clear lines down from center")
     }
     pub fn clear_line_at(self: &Self, position: (u16, u16)) {
         let mut stdout = stdout();
