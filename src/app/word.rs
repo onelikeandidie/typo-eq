@@ -1,11 +1,22 @@
 use chrono::Utc;
 
+#[derive(Debug)]
 pub struct Word {
     pub size: usize,
     pub original: String,
+    pub original_chars: Vec<char>,
+    pub translation: Vec<String>,
+}
+
+#[derive(Debug)]
+pub struct Phrase {
+    pub size: usize,
+    pub original: String,
+    pub original_chars: Vec<char>,
     pub translation: String,
 }
 
+#[derive(Debug)]
 pub struct State {
     pub progress: usize,
     pub failed: bool,
@@ -29,7 +40,7 @@ impl Default for State {
     }
 }
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct Stats {
     pub completed: u64,
     pub chars_typed: u64,
