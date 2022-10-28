@@ -21,6 +21,7 @@ impl Display for AppEvent {
 pub enum ProgressEvent {
     Fail,
     Success(Option<char>),
+    Completed(String),
 }
 
 impl Display for ProgressEvent {
@@ -28,6 +29,7 @@ impl Display for ProgressEvent {
         write!(f, "{}", match self {
             Self::Fail => "Failed",
             Self::Success(_) => "Success",
+            Self::Completed(_) => "Completed",
         })
     }
 }
