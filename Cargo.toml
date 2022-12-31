@@ -2,7 +2,7 @@
 name = "typo-eq"
 description = "Typo-eq is a typing training app for other languages. All it needs is a dictionary for words and their translations."
 license = "GPL-3.0"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 repository = "https://github.com/onelikeandidie/typo-eq"
 
