@@ -1,6 +1,6 @@
 use std::io::{stdout, Write};
 
-use crossterm::{terminal::{EnterAlternateScreen, enable_raw_mode, disable_raw_mode, LeaveAlternateScreen, Clear, ClearType}, style::{Color, SetForegroundColor, ResetColor}, execute, cursor::{MoveTo, position, MoveToRow, Hide, Show}, event::{PushKeyboardEnhancementFlags, KeyboardEnhancementFlags, PopKeyboardEnhancementFlags}};
+use crossterm::{terminal::{EnterAlternateScreen, enable_raw_mode, disable_raw_mode, LeaveAlternateScreen, Clear, ClearType}, style::{Color, SetForegroundColor, ResetColor}, execute, cursor::{MoveTo, position, MoveToRow, Hide, Show, MoveToColumn}, event::{PushKeyboardEnhancementFlags, KeyboardEnhancementFlags, PopKeyboardEnhancementFlags}};
 
 use super::util::term_center;
 
@@ -141,6 +141,7 @@ impl Renderer {
         let mut stdout = stdout();
         execute!(
             stdout,
+            MoveToColumn(0),
             MoveToRow((center.1 as i16 + offset_y) as u16),
             Clear(ClearType::FromCursorDown)
         ).expect("Could not clear lines down from center")

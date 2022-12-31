@@ -6,15 +6,16 @@ use std::time::Duration;
 use crossterm::event::{read, Event, KeyCode, KeyEvent, KeyModifiers};
 use crossterm::style::Color;
 use crossterm::terminal::{Clear, ClearType};
-use rand::distributions::Uniform;
+use rand::distributions::{Uniform, WeightedIndex};
 use rand::prelude::Distribution;
 use rand::thread_rng;
 use chrono::offset::Utc;
 
+pub mod cursor;
 pub mod events;
+pub mod icons;
 pub mod word;
 pub mod render;
-pub mod cursor;
 pub mod util;
 
 use crate::app::cursor::Cursor;
@@ -22,13 +23,16 @@ use crate::app::events::*;
 use crate::app::render::{Renderer, TextAlign};
 use crate::app::word::*;
 
+use crate::config::Profile;
 use crate::{config::Config, importer::dictionary::Dictionary};
+
+use self::icons::Icon;
 
 pub const SKIP_CHARACTERS: [char; 2] = [
     '/', '|'
 ];
 
-pub fn create_app(config: Config) {
+pub fn create_app(mut config: Config) {
     let stdout = stdout();
 
     let renderer = Renderer::init();
@@ -64,6 +68,7 @@ pub fn create_app(config: Config) {
         }
     }
     let dict = dict.expect("Could not load dictionary");
+    let mut profile = config.profile.clone();
     
     let mut state = State::default();
 
@@ -74,10 +79,9 @@ pub fn create_app(config: Config) {
         (0, -6), None, None, None, None,
     );
     let mut old_words: Vec<Word> = Vec::new();
-    let mut word = new_word(&dict);
-    renderer.clear_line_at_center((0,0));
+    let mut word = new_word(&dict, &profile);
     render_translations(&renderer, &word);
-    render_center(&renderer, &word, &state);
+    render_center(&renderer, &word, &state, &profile);
     render_cursor(&renderer, &word, &state);
 
     while let Ok(event) = read() {
@@ -97,7 +101,7 @@ pub fn create_app(config: Config) {
                 ..
             }) => {
                 state.failed = false;
-                render_center(&renderer, &word, &state);
+                render_center(&renderer, &word, &state, &profile);
             }
             Event::Key(KeyEvent {
                 code: KeyCode::Char(c), 
@@ -124,11 +128,18 @@ pub fn create_app(config: Config) {
                 let current_timestamp = Utc::now().timestamp_millis();
                 let diff = current_timestamp - state.last_word_timestamp;
                 state.wpm = 1.0 / (diff as f64 / 1000.0 / 60.0);
-                render_center(&renderer, &word, &state);
+                render_center(&renderer, &word, &state, &profile);
                 if state.progress >= word.size {
                     // Update last word completed timestamp
                     state.last_word_timestamp = Utc::now().timestamp_millis();
                     state.stats.completed += 1;
+                    // Update profile
+                    let learnt = profile.words_learnt.get_mut(&word.original);
+                    if let Some(learnt) = learnt {
+                        *learnt += 1;
+                    } else {
+                        profile.words_learnt.insert(word.original.clone(), 1);
+                    }
                     // Add last word to the book of words
                     old_words.push(word);
                     if old_words.len() >= 5 {
@@ -138,10 +149,9 @@ pub fn create_app(config: Config) {
                     // Clear the user input
                     renderer.clear_line_at_center((0, 2));
                     // New word
-                    word = new_word(&dict);
+                    word = new_word(&dict, &profile);
                     state.progress = 0;
-                    renderer.clear_line_at_center((0,0));
-                    render_center(&renderer, &word, &state);
+                    render_center(&renderer, &word, &state, &profile);
                     render_translations(&renderer, &word);
                 }
             }
@@ -149,6 +159,7 @@ pub fn create_app(config: Config) {
         }
         render_cursor(&renderer, &word, &state);
     }
+    // Show final screen after loop break
     // Update wpm
     let current_timestamp = Utc::now().timestamp_millis();
     let diff = current_timestamp - state.started_at;
@@ -176,20 +187,66 @@ pub fn create_app(config: Config) {
     );
     // Move cursor out of frame as to continue out of raw mode [rp[[er]]]
     Cursor::move_to_center((0, 8));
+    // Save the profile
+    config.profile_file.profiles.insert(profile.name.clone(), profile);
+    config.profile_file.save().expect("Could not save profile data");
 }
 
-pub fn render_center(renderer: &Renderer, word: &Word, state: &State) {
+pub fn new_word(dict: &Dictionary, profile: &Profile) -> Word {
+    let mut rng = thread_rng();
+    // Select either from the dictionary of from the learnt words
+    let which = WeightedIndex::new([1, 2]).unwrap();
+    if which.sample(&mut rng) == 0 || profile.words_learnt.len() == 0 {
+        // Select a random word from dictionary
+        let distribuition = Uniform::new(0, dict.entries.len());
+        let word_index = distribuition.sample(&mut rng);
+        let word = dict.words.get(word_index);
+        if let Some(word) = word {
+            return Word {
+                size: word.identifier.chars().count(),
+                original: word.identifier.clone(),
+                original_chars: word.identifier.chars().collect(),
+                translation: word.translation.clone(),
+            }
+        }
+    } else {
+        // Select from learnt word
+        let words = profile.words_learnt.clone().into_iter().collect::<Vec<(String, i64)>>();
+        let distribuition = Uniform::new(0, words.len());
+        let word_index = distribuition.sample(&mut rng);
+        if let Some((word, _)) = words.get(word_index) {
+            // Find the word in the dictionary
+            let dict_word = dict.words.iter()
+                .find(|d| d.identifier == word.to_string());
+            if let Some(word) = dict_word {
+                return Word {
+                    size: word.identifier.chars().count(),
+                    original: word.identifier.clone(),
+                    original_chars: word.identifier.chars().collect(),
+                    translation: word.translation.clone(),
+                }
+            }
+        }
+    }
+    panic!("Word could not be selected, out of bounds");
+}
+
+pub fn render_center(renderer: &Renderer, word: &Word, state: &State, profile: &Profile) {
+    renderer.clear_line_at_center((0,0));
+    let half_word = word.size as i16 / 2;
     // Update progress display
+    let progress_str = format!("{}/{}", state.progress, word.size);
+    let progress_len = progress_str.len() as i16;
     renderer.print_at_center(
-        format!("{}/{}", state.progress, word.size).as_str(),
-        (word.size as i16 / 2 + 4, 0), Some(TextAlign::Left), 
+        progress_str.as_str(),
+        (half_word + 4, 0), Some(TextAlign::Left), 
         Some(Color::DarkGrey), None,
         None
     );
     // Update wpm display
     renderer.print_at_center(
         format!("{} wpm", state.wpm.round()).as_str(), 
-        (- (word.size as i16 / 2) - 4, 0), Some(TextAlign::Right), 
+        (- half_word - 4, 0), Some(TextAlign::Right), 
         Some(Color::DarkYellow), None,
         None
     );
@@ -197,7 +254,7 @@ pub fn render_center(renderer: &Renderer, word: &Word, state: &State) {
     let left  = word.original_chars[..state.progress].into_iter().collect::<String>();
     let right = word.original_chars[state.progress..].into_iter().collect::<String>();
     let fail_char = word.original_chars.get(state.progress).unwrap_or(&' ');
-    let left_x   = - (word.size as i16 / 2);
+    let left_x   = - half_word;
     let right_x  = left_x + state.progress as i16;
     renderer.print_at_center(
         left.as_str(),
@@ -216,22 +273,17 @@ pub fn render_center(renderer: &Renderer, word: &Word, state: &State) {
             Some(Color::DarkRed), None, None
         );
     }
+    let learnt = profile.words_learnt.get(&word.original).unwrap_or(&0);
+    render_knowledge(renderer, *learnt);
 }
 
-pub fn new_word(dict: &Dictionary) -> Word {
-    let mut rng = thread_rng();
-    let distribuition = Uniform::new(0, dict.entries.len());
-    let word_index = distribuition.sample(&mut rng);
-    let word = dict.words.get(word_index);
-    if let Some(word) = word {
-        return Word {
-            size: word.identifier.chars().count(),
-            original: word.identifier.clone(),
-            original_chars: word.identifier.chars().collect(),
-            translation: word.translation.clone(),
-        }
-    }
-    panic!("Word could not be selected, out of bounds");
+pub fn render_knowledge(renderer: &Renderer, learnt: i64) {
+    renderer.print_at_center(
+        format!("{} {}", learnt, Icon::from(learnt)).as_str(),
+        (0, 2), Some(TextAlign::Left), 
+        Some(Color::Green), None,
+        None
+    );
 }
 
 pub fn render_completed_words(renderer: &Renderer, words: &Vec<Word>) {
@@ -264,7 +316,7 @@ pub fn render_completed_words(renderer: &Renderer, words: &Vec<Word>) {
 }
 
 pub fn render_translations(renderer: &Renderer, word: &Word) {
-    renderer.clear_down_from_center_at(2);
+    renderer.clear_down_from_center_at(3);
     for i in 0..(word.translation.len()) {
         let translation = word.translation.get(i).unwrap();
         // Show the completed word in grey
@@ -272,7 +324,7 @@ pub fn render_translations(renderer: &Renderer, word: &Word) {
             format!(
                 "{}", 
                 translation
-            ).as_str(), (0, 2 + i as i16),
+            ).as_str(), (0, 3 + i as i16),
             None, None, None,
             None,
         );
