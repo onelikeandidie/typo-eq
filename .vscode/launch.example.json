@@ -1,0 +1,26 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Launch and open dictionary",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=typo-eq",
+                    "--package=typo-eq"
+                ],
+                "filter": {
+                    "name": "typo-eq",
+                    "kind": "bin"
+                }
+            },
+            "args": [
+                "--dict",
+                "./data/your_dictionary_file"
+            ],
+            "cwd": "${workspaceFolder}"
+        }
+    ]
+}
