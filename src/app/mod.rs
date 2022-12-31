@@ -1,4 +1,3 @@
-use std::fs::File;
 use std::io::{stdout, Write};
 use std::sync::mpsc;
 use std::thread::{self, sleep};
@@ -24,6 +23,7 @@ use crate::app::render::{Renderer, TextAlign};
 use crate::app::word::*;
 
 use crate::config::Profile;
+use crate::importer;
 use crate::{config::Config, importer::dictionary::Dictionary};
 
 use self::icons::Icon;
@@ -40,9 +40,7 @@ pub fn create_app(mut config: Config) {
     let (ltx, lrx) = mpsc::channel::<AppEvent>();
     let _loading_thread = thread::spawn(move || {
         ltx.send(AppEvent::LoadingStarted).unwrap();
-        let file = File::open(config.dictionary_path.clone())
-            .expect("Could not load the dictionary file");
-        let dict = Dictionary::from_file(file);
+        let dict = importer::parser::parse_file(&config.dictionary_path);
         ltx.send(AppEvent::DictionaryLoaded(dict)).unwrap();
         ltx.send(AppEvent::LoadingFinished).unwrap();
     });
@@ -236,7 +234,7 @@ pub fn render_center(renderer: &Renderer, word: &Word, state: &State, profile: &
     let half_word = word.size as i16 / 2;
     // Update progress display
     let progress_str = format!("{}/{}", state.progress, word.size);
-    let progress_len = progress_str.len() as i16;
+    let _progress_len = progress_str.len() as i16;
     renderer.print_at_center(
         progress_str.as_str(),
         (half_word + 4, 0), Some(TextAlign::Left), 
